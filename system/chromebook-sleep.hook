@@ -1,0 +1,104 @@
+#!/bin/bash
+
+# chromebook-sleep: power off after sleeping longer than POWEROFF_AFTER.
+# Installed to /usr/lib/systemd/system-sleep/chromebook-sleep.
+#
+#   pre  suspend: arm an RTC alarm for now + limit, remember when we went to sleep
+#   post suspend: disarm it; if we slept at least the limit, power off
+#
+# Only plain suspend is handled; hibernate, hybrid-sleep and suspend-then-hibernate
+# are ignored so this never fights another setup.
+
+CS_LIB=${CHROMEBOOK_SLEEP_LIB:-/usr/lib/chromebook-sleep/common.sh}
+# shellcheck source=common.sh
+source "$CS_LIB" || exit 0
+
+# A wake this close to the limit still counts as ours (clock resync after resume).
+TOLERANCE_SECONDS=30
+
+phase=$1 action=$2
+[[ $action == suspend ]] || exit 0
+
+state=$CS_RUN/state
+
+rtc_clear() {
+  echo 0 >"$CS_RTC/wakealarm" 2>/dev/null
+}
+
+pre() {
+  rm -f "$state"
+
+  if ! cs_load_config; then
+    local err
+    for err in "${CS_CONFIG_ERRORS[@]}"; do cs_log warning "config: $err"; done
+    cs_log warning "invalid config, not arming (treated as disabled)"
+    return
+  fi
+  [[ $CS_ENABLED == yes ]] || return
+
+  if [[ $CS_ON_AC == skip ]] && cs_on_ac; then
+    cs_log info "on AC with ON_AC=skip, not arming"
+    return
+  fi
+
+  if [[ ! -w $CS_RTC/wakealarm ]]; then
+    cs_log err "$CS_RTC/wakealarm not writable, cannot arm"
+    return
+  fi
+
+  local now target
+  now=$(date +%s)
+  target=$((now + CS_LIMIT_SECONDS))
+  # The kernel refuses a new alarm while one is pending, so clear first.
+  rtc_clear
+  if ! echo "$target" >"$CS_RTC/wakealarm" 2>/dev/null; then
+    cs_log err "failed to set RTC alarm to $target"
+    return
+  fi
+
+  mkdir -p -m 0700 "$CS_RUN"
+  # Snapshot the policy so edits made while asleep don't change this cycle.
+  echo "$now $CS_LIMIT_SECONDS $CS_ON_AC" >"$state"
+  cs_log info "armed: power off after $(cs_human "$CS_LIMIT_SECONDS") asleep (alarm at $(date -d "@$target" '+%F %T'))"
+}
+
+post() {
+  [[ -f $state ]] || return
+
+  local start limit on_ac
+  read -r start limit on_ac <"$state"
+  rm -f "$state"
+  rtc_clear
+
+  if [[ ! $start =~ ^[0-9]+$ || ! $limit =~ ^[0-9]+$ ]]; then
+    cs_log err "corrupt state file, ignoring"
+    return
+  fi
+
+  local elapsed=$(($(date +%s) - start))
+  if ((elapsed + TOLERANCE_SECONDS < limit)); then
+    cs_log info "woke after $(cs_human "$elapsed") (limit $(cs_human "$limit")), normal resume"
+    return
+  fi
+
+  if [[ $on_ac == skip ]] && cs_on_ac; then
+    cs_log info "asleep $(cs_human "$elapsed"), limit reached but now on AC with ON_AC=skip, not powering off"
+    return
+  fi
+
+  cs_log notice "asleep $(cs_human "$elapsed") (limit $(cs_human "$limit")), powering off"
+  if [[ -n ${CHROMEBOOK_SLEEP_DRY_RUN:-} ]]; then
+    cs_log notice "dry run: would start poweroff.target"
+    return
+  fi
+  # Not `systemctl poweroff`: that goes through logind, which rejects it while this
+  # suspend operation is still in progress. Starting the target irreversibly is what
+  # logind does itself, and it also blocks a lid-triggered re-suspend from replacing it.
+  systemctl start --no-block --job-mode=replace-irreversibly poweroff.target
+}
+
+case $phase in
+  pre) pre ;;
+  post) post ;;
+esac
+exit 0

@@ -58,9 +58,11 @@ chromebook-sleep/
 ├── Panel.qml / Service.qml  # settings UI + status (kind decided in Phase 3)
 ├── system/
 │   ├── chromebook-sleep.hook   # installed to /usr/lib/systemd/system-sleep/chromebook-sleep
+│   ├── common.sh               # config parser + helpers, installed to /usr/lib/chromebook-sleep/
 │   ├── chromebook-sleep        # CLI, installed to /usr/local/bin
 │   ├── setup.sh                # installs the system parts (needs sudo)
 │   └── uninstall.sh
+├── tests/hook-test.sh       # runs the hook against a fake config/RTC/power_supply tree
 ├── README.md
 ├── LICENSE                  # MIT
 └── preview.png
@@ -70,11 +72,17 @@ chromebook-sleep/
 - Script: `/usr/lib/systemd/system-sleep/chromebook-sleep`.
 - **`pre suspend`:**
   - Read the config.
-  - If enabled, write the start time to `/run/chromebook-sleep/start` and arm the RTC alarm.
+  - If enabled, and not on AC while `ON_AC=skip`: arm the RTC alarm and write
+    `<start> <limit-seconds> <on-ac>` to `/run/chromebook-sleep/state`.
+    - The snapshot means config edits made while asleep don't change the current cycle.
 - **`post suspend`:**
-  - Always disarm the alarm.
-  - If elapsed time ≥ LIMIT and the AC policy allows it, log the decision and run
-    `systemctl poweroff --no-block`.
+  - If the state file exists (we armed), disarm the alarm. A foreign alarm is left alone.
+  - If elapsed time ≥ LIMIT − 30 s and the AC policy allows it (AC is checked again),
+    log the decision and start the power-off.
+  - The power-off is `systemctl start --no-block --job-mode=replace-irreversibly poweroff.target`,
+    not `systemctl poweroff`. The latter goes through logind, which rejects it while the
+    suspend operation is still in progress. Starting the target irreversibly is what logind
+    does itself, and it also stops a lid-triggered re-suspend from replacing the power-off.
 - **Safety:**
   - Never `source` the config. Parse it with strict regexes.
   - Treat invalid values as "disabled" and log a warning.
@@ -88,7 +96,7 @@ chromebook-sleep/
 - Contents:
   ```ini
   ENABLED=yes
-  POWEROFF_AFTER=12h      # <number><m|h|d>; user-defined, e.g. 30m, 8h, 3d
+  POWEROFF_AFTER=12h      # <number><m|h|d>, 2m–28d (rtc_cmos alarms reach one month ahead)
   ON_AC=skip              # skip = never power off while plugged in (ChromeOS behaviour) | poweroff
   ```
 - No hidden default: `setup.sh` asks for the time on first install.
@@ -144,9 +152,10 @@ chromebook-sleep/
   | Disabled / invalid config | Hook does nothing, warning logged |
   | Suspend from menu vs lid | Same behaviour |
 
-- Open question: after an alarm wake with `ON_AC=skip`, should the hook re-suspend right away
-  (`systemctl suspend`), or not set the alarm at all while on AC? Prefer the latter: check AC in
-  `pre`, which avoids the extra wake.
+- Decided (#3): with `ON_AC=skip`, don't arm the alarm while on AC; check AC in `pre`.
+  - Consequence: unplugging during sleep doesn't start the timer. ChromeOS behaves the same way.
+  - If the alarm fires but the machine was plugged in during sleep, it stays awake with the lid
+    closed. #2 showed logind does not re-suspend on its own. Observe this in #6.
 
 ### Phase 3: Shell plugin UI
 - Study the first-party plugins in `/usr/share/omarchy/shell/plugins/` (`panels`, `services`,
