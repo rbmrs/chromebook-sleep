@@ -37,6 +37,7 @@ fi
 rm -rf "$run"
 
 for f in \
+  "$DESTDIR/usr/lib/systemd/system-sleep/chromebook-sleep" \
   "$DESTDIR/etc/systemd/system-sleep/chromebook-sleep" \
   "$DESTDIR/usr/local/bin/chromebook-sleep" \
   "$DESTDIR/usr/local/lib/chromebook-sleep"; do

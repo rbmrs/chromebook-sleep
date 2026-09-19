@@ -57,7 +57,7 @@ chromebook-sleep/
 ├── manifest.json            # Omarchy shell plugin manifest (schemaVersion 1)
 ├── Panel.qml / Service.qml  # settings UI + status (kind decided in Phase 3)
 ├── system/
-│   ├── chromebook-sleep.hook   # installed to /etc/systemd/system-sleep/chromebook-sleep
+│   ├── chromebook-sleep.hook   # installed to /usr/lib/systemd/system-sleep/chromebook-sleep
 │   ├── common.sh               # config parser + helpers, installed to /usr/local/lib/chromebook-sleep/
 │   ├── chromebook-sleep        # CLI, installed to /usr/local/bin
 │   ├── setup.sh                # installs the system parts (needs sudo)
@@ -69,7 +69,7 @@ chromebook-sleep/
 ```
 
 ### 1. System hook (runs as root)
-- Script: `/etc/systemd/system-sleep/chromebook-sleep`.
+- Script: `/usr/lib/systemd/system-sleep/chromebook-sleep`.
 - **`pre suspend`:**
   - Read the config.
   - If enabled, and not on AC while `ON_AC=skip`: arm the RTC alarm and write

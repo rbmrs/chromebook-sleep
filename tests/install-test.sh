@@ -17,7 +17,7 @@ uninstall() { "$root/system/uninstall.sh" "$@" >"$tmp/out" 2>&1 </dev/null; }
 mode() { stat -c %a "$DESTDIR$1"; }
 has() { grep -q -- "$1" "$tmp/out"; }
 
-hook=/etc/systemd/system-sleep/chromebook-sleep
+hook=/usr/lib/systemd/system-sleep/chromebook-sleep
 cli=/usr/local/bin/chromebook-sleep
 lib=/usr/local/lib/chromebook-sleep/common.sh
 conf=/etc/chromebook-sleep.conf
@@ -51,6 +51,12 @@ setup --after 1h
 check "re-run succeeds" test $? -eq 0
 check "re-run keeps config" grep -q '^POWEROFF_AFTER=3d ' "$DESTDIR$conf"
 check "re-run says so" has "Keeping config"
+
+mkdir -p "$DESTDIR/etc/systemd/system-sleep" "$DESTDIR/run/chromebook-sleep"
+touch "$DESTDIR/etc/systemd/system-sleep/chromebook-sleep" "$DESTDIR/run/chromebook-sleep/test"
+setup
+check "re-run removes hook from /etc (never executed there)" test ! -e "$DESTDIR/etc/systemd/system-sleep/chromebook-sleep"
+check "re-run removes a leftover test override" test ! -e "$DESTDIR/run/chromebook-sleep/test"
 
 chmod 0600 "$DESTDIR$conf"
 setup

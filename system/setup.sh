@@ -29,7 +29,7 @@ done
 # shellcheck source=common.sh
 source "$src/common.sh"
 
-hook=$DESTDIR/etc/systemd/system-sleep/chromebook-sleep
+hook=$DESTDIR/usr/lib/systemd/system-sleep/chromebook-sleep
 lib=$DESTDIR/usr/local/lib/chromebook-sleep/common.sh
 cli=$DESTDIR/usr/local/bin/chromebook-sleep
 conf=$DESTDIR/etc/chromebook-sleep.conf
@@ -42,6 +42,17 @@ install -D -m 0755 "${owner[@]}" "$src/chromebook-sleep.hook" "$hook"
 install -D -m 0755 "${owner[@]}" "$src/chromebook-sleep" "$cli"
 echo "Installed hook:  ${hook#"$DESTDIR"}"
 echo "Installed CLI:   ${cli#"$DESTDIR"}"
+
+# systemd-sleep only runs hooks from /usr/lib/systemd/system-sleep; an early
+# version installed to /etc, where it was never executed.
+legacy_hook=$DESTDIR/etc/systemd/system-sleep/chromebook-sleep
+if [[ -e $legacy_hook ]]; then
+  rm -f "$legacy_hook"
+  echo "Removed unused:  ${legacy_hook#"$DESTDIR"}"
+fi
+# A test override left over from an unfinished `chromebook-sleep test` would make the
+# next ordinary suspend power off after a couple of minutes.
+rm -f "$DESTDIR/run/chromebook-sleep/test"
 
 if [[ -f $conf ]]; then
   echo "Keeping config:  ${conf#"$DESTDIR"}"

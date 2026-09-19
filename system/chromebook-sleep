@@ -14,7 +14,7 @@ fi
 # shellcheck source=common.sh
 source "$CS_LIB" || { echo "chromebook-sleep: cannot load $CS_LIB" >&2; exit 1; }
 
-CS_HOOK=${CHROMEBOOK_SLEEP_HOOK:-/etc/systemd/system-sleep/chromebook-sleep}
+CS_HOOK=${CHROMEBOOK_SLEEP_HOOK:-/usr/lib/systemd/system-sleep/chromebook-sleep}
 
 usage() {
   cat <<EOF
