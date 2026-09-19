@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.rbmrs.chromebook-sleep",
+  "name": "Chromebook Sleep",
+  "version": "0.1.0",
+  "author": "rbm",
+  "license": "MIT",
+  "homepage": "https://github.com/rbmrs/chromebook-sleep",
+  "description": "ChromeOS-style shutdown from suspend: if the laptop stays asleep longer than a set time, it wakes itself and powers off. Open from SUPER+SPACE › Chromebook Sleep, or with: omarchy-shell shell toggle io.github.rbmrs.chromebook-sleep",
+  "kinds": ["panel", "service"],
+  "entryPoints": {
+    "panel": "Panel.qml",
+    "service": "Service.qml"
+  }
+}

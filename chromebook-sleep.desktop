@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Chromebook Sleep
+GenericName=Power Off After Sleep
+Comment=Power off automatically when the laptop has been asleep too long
+Exec=omarchy-shell shell toggle io.github.rbmrs.chromebook-sleep
+TryExec=omarchy-shell
+Icon=system-shutdown
+Terminal=false
+StartupNotify=false
+Categories=Settings;HardwareSettings;
+Keywords=sleep;suspend;shutdown;poweroff;battery;chromebook;
+X-ChromebookSleep-Managed=true
