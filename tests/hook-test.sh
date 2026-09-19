@@ -103,6 +103,21 @@ for other in hibernate hybrid-sleep suspend-then-hibernate; do
   check "ignores $other" bash -c "! test -f $tmp/run/state"
 done
 
+# --- one-shot test override ---
+reset; conf ENABLED=no POWEROFF_AFTER=3d ON_AC=skip; set_ac 1
+mkdir -p "$tmp/run"; echo 2m >"$tmp/run/test"
+run pre suspend
+check "test override arms even when disabled and on AC" grep -q " 120 poweroff$" "$tmp/run/state"
+check "test override is consumed" bash -c "! test -f $tmp/run/test"
+: >"$tmp/log"; run pre suspend
+check "next suspend uses config again" bash -c "! test -f $tmp/run/state"
+
+reset; conf ENABLED=yes POWEROFF_AFTER=3d ON_AC=skip
+mkdir -p "$tmp/run"; echo '$(reboot)' >"$tmp/run/test"
+run pre suspend
+check "invalid test override falls back to config" grep -q " 259200 skip$" "$tmp/run/state"
+check "invalid test override warns" log_has "ignoring invalid test duration"
+
 # --- post ---
 reset; slept 7200 7200
 run post suspend

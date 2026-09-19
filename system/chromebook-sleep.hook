@@ -28,6 +28,23 @@ rtc_clear() {
 pre() {
   rm -f "$state"
 
+  # `chromebook-sleep test` leaves a one-shot duration here (via sudo). It overrides
+  # the config for this suspend only, powers off even on AC, and is gone after
+  # use or reboot, so the user's settings never change.
+  local test_file=$CS_RUN/test
+  if [[ -f $test_file ]]; then
+    local test_after
+    read -r test_after <"$test_file"
+    rm -f "$test_file"
+    if CS_LIMIT_SECONDS=$(cs_duration_seconds "$test_after"); then
+      cs_log notice "test run: overriding config with POWEROFF_AFTER=$test_after ON_AC=poweroff"
+      CS_ON_AC=poweroff
+      arm
+      return
+    fi
+    cs_log warning "ignoring invalid test duration '$test_after'"
+  fi
+
   if ! cs_load_config; then
     local err
     for err in "${CS_CONFIG_ERRORS[@]}"; do cs_log warning "config: $err"; done
@@ -41,6 +58,11 @@ pre() {
     return
   fi
 
+  arm
+}
+
+# Arm the alarm for CS_LIMIT_SECONDS from now and record state for post.
+arm() {
   if [[ ! -w $CS_RTC/wakealarm ]]; then
     cs_log err "$CS_RTC/wakealarm not writable, cannot arm"
     return

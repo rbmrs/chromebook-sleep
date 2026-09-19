@@ -1,0 +1,221 @@
+#!/bin/bash
+
+# chromebook-sleep: configure the power-off-after-sleeping hook.
+# Installed to /usr/local/bin/chromebook-sleep.
+
+set -u
+
+self_dir=$(dirname "$(readlink -f "$0")")
+CS_LIB=${CHROMEBOOK_SLEEP_LIB:-}
+if [[ -z $CS_LIB ]]; then
+  CS_LIB=/usr/lib/chromebook-sleep/common.sh
+  [[ -f $self_dir/common.sh ]] && CS_LIB=$self_dir/common.sh
+fi
+# shellcheck source=common.sh
+source "$CS_LIB" || { echo "chromebook-sleep: cannot load $CS_LIB" >&2; exit 1; }
+
+CS_HOOK=${CHROMEBOOK_SLEEP_HOOK:-/usr/lib/systemd/system-sleep/chromebook-sleep}
+
+usage() {
+  cat <<EOF
+Usage: chromebook-sleep <command>
+
+Power off automatically after the laptop has been asleep for a set time.
+
+Commands:
+  status [--json]        Show settings, install state and the last decision
+  set <duration>         Power off after this long asleep, e.g. 30m, 8h, 2d (2m–28d)
+  enable | disable       Turn the automatic power-off on or off
+  on-ac skip|poweroff    While plugged in: never power off (skip) or behave as on battery
+  test [duration]        Suspend once with a short limit (default 2m) to try it out
+EOF
+}
+
+die() {
+  echo "chromebook-sleep: $*" >&2
+  exit 1
+}
+
+# Set KEY=value in the config, keeping comments and the order of other lines.
+# /etc isn't writable by the user, so no temp-file rename: the file is rewritten in a
+# single write. A torn read by the hook just counts as invalid config for that cycle.
+set_key() {
+  local key=$1 value=$2 line out= found=
+  [[ -f $CS_CONF ]] || die "$CS_CONF not found; run setup.sh first"
+  [[ -w $CS_CONF ]] || die "$CS_CONF is not writable (expected root:wheel 0664; are you in wheel?)"
+
+  local re="^([[:space:]]*$key[[:space:]]*=[[:space:]]*)[^[:space:]#]*(.*)$"
+  while IFS= read -r line || [[ -n $line ]]; do
+    if [[ -z $found && $line =~ $re ]]; then
+      line="${BASH_REMATCH[1]}$value${BASH_REMATCH[2]}"
+      found=1
+    fi
+    out+=$line$'\n'
+  done <"$CS_CONF"
+  [[ -n $found ]] || out+="$key=$value"$'\n'
+
+  printf '%s' "$out" >"$CS_CONF" || die "failed to write $CS_CONF"
+}
+
+# The change itself succeeded, so only warn if other keys still make the config invalid.
+report_config() {
+  cs_load_config && return
+  local err
+  echo "warning: config is invalid, the hook treats it as disabled:" >&2
+  for err in "${CS_CONFIG_ERRORS[@]}"; do echo "  $err" >&2; done
+  return 0
+}
+
+hook_installed() { [[ -x $CS_HOOK ]]; }
+
+rtc_wakeup() {
+  local f=$CS_RTC/device/power/wakeup
+  [[ -r $f ]] && cat "$f" || echo unknown
+}
+
+# Last hook message across boots: sets last_time (epoch) and last_message.
+last_event() {
+  last_time= last_message=
+  local line
+  line=$(journalctl -t chromebook-sleep -n 1 -q --no-pager -o short-unix 2>/dev/null) || return
+  [[ -n $line ]] || return
+  last_time=${line%%.*}
+  last_message=${line#*: }
+}
+
+json_str() {
+  local s=$1
+  s=${s//\\/\\\\}
+  s=${s//\"/\\\"}
+  s=${s//$'\t'/\\t}
+  s=${s//$'\n'/\\n}
+  printf '"%s"' "$s"
+}
+
+json_bool() { [[ $1 == yes ]] && printf true || printf false; }
+
+cmd_status() {
+  local json=
+  case ${1:-} in
+    --json) json=1 ;;
+    "") ;;
+    *) die "unknown option: $1" ;;
+  esac
+
+  local valid=yes installed=no on_ac=no
+  cs_load_config || valid=no
+  hook_installed && installed=yes
+  cs_on_ac && on_ac=yes
+  last_event
+
+  if [[ -n $json ]]; then
+    local errs= e
+    for e in "${CS_CONFIG_ERRORS[@]}"; do errs+=${errs:+,}$(json_str "$e"); done
+    printf '{"installed":%s,"configPath":%s,"configValid":%s,"configErrors":[%s],' \
+      "$(json_bool $installed)" "$(json_str "$CS_CONF")" "$(json_bool $valid)" "$errs"
+    printf '"enabled":%s,"poweroffAfter":%s,"limitSeconds":%s,"onAc":%s,' \
+      "$(json_bool "$CS_ENABLED")" "$(json_str "$CS_POWEROFF_AFTER")" "${CS_LIMIT_SECONDS:-null}" "$(json_str "$CS_ON_AC")"
+    printf '"onAcNow":%s,"rtcWakeup":%s,"lastEvent":' "$(json_bool $on_ac)" "$(json_str "$(rtc_wakeup)")"
+    if [[ -n $last_time ]]; then
+      printf '{"time":%s,"message":%s}}\n' "$last_time" "$(json_str "$last_message")"
+    else
+      printf 'null}\n'
+    fi
+    return
+  fi
+
+  local state
+  if [[ $valid == no ]]; then
+    state="invalid config (treated as disabled)"
+  elif [[ $CS_ENABLED == yes ]]; then
+    state="enabled: power off after $(cs_human "$CS_LIMIT_SECONDS") asleep"
+  else
+    state=disabled
+  fi
+
+  echo "Status:      $state"
+  [[ $valid == no ]] && printf '             %s\n' "${CS_CONFIG_ERRORS[@]}"
+  echo "On AC:       ${CS_ON_AC:-?} (plugged in now: $on_ac)"
+  echo "Hook:        $([[ $installed == yes ]] && echo "installed" || echo "NOT installed, run system/setup.sh")"
+  echo "RTC wakeup:  $(rtc_wakeup)"
+  echo "Config:      $CS_CONF"
+  if [[ -n $last_time ]]; then
+    echo "Last event:  $(date -d "@$last_time" '+%F %T'), $last_message"
+  else
+    echo "Last event:  none"
+  fi
+}
+
+cmd_set() {
+  (($# == 1)) || die "usage: chromebook-sleep set <duration>, e.g. 8h"
+  cs_duration_seconds "$1" >/dev/null || die "invalid duration '$1': use <number><m|h|d> between 2m and 28d, e.g. 30m, 8h, 2d"
+  set_key POWEROFF_AFTER "$1"
+  echo "Will power off after $(cs_human "$(cs_duration_seconds "$1")") asleep."
+  report_config
+}
+
+cmd_enable() {
+  set_key ENABLED "$1"
+  if [[ $1 == yes ]]; then echo "Enabled."; else echo "Disabled."; fi
+  report_config
+}
+
+cmd_on_ac() {
+  [[ ${1:-} =~ ^(skip|poweroff)$ && $# == 1 ]] || die "usage: chromebook-sleep on-ac skip|poweroff"
+  set_key ON_AC "$1"
+  if [[ $1 == skip ]]; then echo "Will never power off while plugged in."; else echo "Will power off on AC too."; fi
+  report_config
+}
+
+cmd_test() {
+  local after=${1:-2m}
+  (($# <= 1)) || die "usage: chromebook-sleep test [duration]"
+  cs_duration_seconds "$after" >/dev/null || die "invalid duration '$after'"
+  hook_installed || die "the hook is not installed; run system/setup.sh first"
+
+  local test_file=$CS_RUN/test since
+  echo "Test run: the next suspend powers off after $after asleep, ignoring your"
+  echo "settings (also on AC). Your config is not changed."
+  echo
+  echo "sudo is needed once to hand the test duration to the hook."
+  sudo install -D -m 0600 /dev/stdin "$test_file" <<<"$after" || die "could not write $test_file"
+  since=$(date +%s)
+  trap 'sudo rm -f "$test_file"; echo; echo "Test cancelled."; exit 130' INT TERM
+
+  echo
+  echo "Close the lid now, or press Enter to suspend. Ctrl-C cancels."
+  echo "Leave it asleep for $after: it should wake by itself and power off."
+  echo "Opening it earlier ends the test with a normal resume."
+  local reply
+  if read -r -t 600 reply; then
+    systemctl suspend
+  fi
+
+  # We are frozen while asleep. If this loop sees an outcome, the machine resumed
+  # instead of powering off; after a power-off, check `chromebook-sleep status`.
+  local msg
+  while :; do
+    msg=$(journalctl -t chromebook-sleep --since "@$since" -q --no-pager -o cat 2>/dev/null |
+      grep -E 'normal resume|powering off|not arming|not powering off|cannot arm|failed' | tail -n 1)
+    [[ -n $msg ]] && break
+    sleep 1
+  done
+  trap - INT TERM
+  sudo -n rm -f "$test_file" 2>/dev/null
+  echo
+  echo "Result: $msg"
+}
+
+cmd=${1:-}
+(($#)) && shift
+case $cmd in
+  status) cmd_status "$@" ;;
+  set) cmd_set "$@" ;;
+  enable) (($# == 0)) || die "usage: chromebook-sleep enable"; cmd_enable yes ;;
+  disable) (($# == 0)) || die "usage: chromebook-sleep disable"; cmd_enable no ;;
+  on-ac) cmd_on_ac "$@" ;;
+  test) cmd_test "$@" ;;
+  -h | --help | help) usage ;;
+  "") usage >&2; exit 2 ;;
+  *) echo "chromebook-sleep: unknown command '$cmd'" >&2; usage >&2; exit 2 ;;
+esac

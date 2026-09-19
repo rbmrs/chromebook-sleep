@@ -62,7 +62,7 @@ chromebook-sleep/
 │   ├── chromebook-sleep        # CLI, installed to /usr/local/bin
 │   ├── setup.sh                # installs the system parts (needs sudo)
 │   └── uninstall.sh
-├── tests/hook-test.sh       # runs the hook against a fake config/RTC/power_supply tree
+├── tests/                   # hook-test.sh, cli-test.sh: run against a fake config/RTC/power_supply tree
 ├── README.md
 ├── LICENSE                  # MIT
 └── preview.png
@@ -106,7 +106,14 @@ chromebook-sleep/
 - `set <duration>`, e.g. `set 8h`, `set 2d`: validates the value and writes the config.
 - `enable`, `disable`.
 - `on-ac skip|poweroff`.
-- `test`: a guided short test, e.g. power off after 2 minutes asleep.
+- `test [duration]`: a guided short test, default 2m.
+  - It never edits the config. With one `sudo`, it writes a one-shot duration to
+    `/run/chromebook-sleep/test`.
+  - The hook uses that file for the next suspend only, ignoring ENABLED and ON_AC, then deletes
+    it. `/run` is cleared on reboot, so nothing needs restoring after the power-off.
+- `status --json` is the interface for the QML UI.
+- The config is rewritten in place with a single write, not temp+rename, because `/etc` isn't
+  user-writable. A torn read counts as invalid config for that one cycle.
 
 ### 4. Shell plugin (QML)
 - Settings UI:
