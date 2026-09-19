@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a3350"/>
+      <stop offset="1" stop-color="#161b2c"/>
+    </linearGradient>
+    <linearGradient id="display" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1d2a52"/>
+      <stop offset="1" stop-color="#101833"/>
+    </linearGradient>
+    <mask id="crescent">
+      <rect width="256" height="256" fill="#fff"/>
+      <circle cx="139" cy="100" r="21" fill="#000"/>
+    </mask>
+  </defs>
+
+  <rect x="8" y="8" width="240" height="240" rx="52" fill="url(#bg)"/>
+
+  <!-- laptop lid -->
+  <rect x="46" y="56" width="164" height="112" rx="12" fill="#dfe4ee"/>
+  <rect x="56" y="66" width="144" height="92" rx="5" fill="url(#display)"/>
+
+  <!-- asleep: moon and stars on the screen -->
+  <circle cx="126" cy="112" r="25" fill="#f6d77f" mask="url(#crescent)"/>
+  <circle cx="160" cy="88" r="3" fill="#f6d77f"/>
+  <circle cx="84" cy="90" r="2.5" fill="#f6d77f" opacity="0.8"/>
+  <circle cx="170" cy="130" r="2" fill="#f6d77f" opacity="0.7"/>
+
+  <!-- base -->
+  <path d="M30 174 H226 L214 192 Q212 196 206 196 H50 Q44 196 42 192 Z" fill="#b9c1d1"/>
+  <rect x="110" y="174" width="36" height="6" rx="3" fill="#98a1b4"/>
+
+  <!-- power badge -->
+  <circle cx="194" cy="190" r="38" fill="#e8665a" stroke="#161b2c" stroke-width="8"/>
+  <path d="M180 178 A19 19 0 1 0 208 178" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round"/>
+  <line x1="194" y1="168" x2="194" y2="190" stroke="#fff" stroke-width="7" stroke-linecap="round"/>
+</svg>
