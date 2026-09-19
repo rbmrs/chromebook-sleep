@@ -8,13 +8,13 @@ set -u
 self_dir=$(dirname "$(readlink -f "$0")")
 CS_LIB=${CHROMEBOOK_SLEEP_LIB:-}
 if [[ -z $CS_LIB ]]; then
-  CS_LIB=/usr/lib/chromebook-sleep/common.sh
+  CS_LIB=/usr/local/lib/chromebook-sleep/common.sh
   [[ -f $self_dir/common.sh ]] && CS_LIB=$self_dir/common.sh
 fi
 # shellcheck source=common.sh
 source "$CS_LIB" || { echo "chromebook-sleep: cannot load $CS_LIB" >&2; exit 1; }
 
-CS_HOOK=${CHROMEBOOK_SLEEP_HOOK:-/usr/lib/systemd/system-sleep/chromebook-sleep}
+CS_HOOK=${CHROMEBOOK_SLEEP_HOOK:-/etc/systemd/system-sleep/chromebook-sleep}
 
 usage() {
   cat <<EOF

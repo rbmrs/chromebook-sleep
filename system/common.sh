@@ -1,5 +1,5 @@
 # Shared helpers for chromebook-sleep. Sourced by the sleep hook and the CLI.
-# Installed to /usr/lib/chromebook-sleep/common.sh.
+# Installed to /usr/local/lib/chromebook-sleep/common.sh.
 #
 # The CHROMEBOOK_SLEEP_* overrides exist for tests only; systemd-sleep runs
 # hooks with a clean environment.

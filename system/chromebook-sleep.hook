@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # chromebook-sleep: power off after sleeping longer than POWEROFF_AFTER.
-# Installed to /usr/lib/systemd/system-sleep/chromebook-sleep.
+# Installed to /etc/systemd/system-sleep/chromebook-sleep.
 #
 #   pre  suspend: arm an RTC alarm for now + limit, remember when we went to sleep
 #   post suspend: disarm it; if we slept at least the limit, power off
@@ -9,7 +9,7 @@
 # Only plain suspend is handled; hibernate, hybrid-sleep and suspend-then-hibernate
 # are ignored so this never fights another setup.
 
-CS_LIB=${CHROMEBOOK_SLEEP_LIB:-/usr/lib/chromebook-sleep/common.sh}
+CS_LIB=${CHROMEBOOK_SLEEP_LIB:-/usr/local/lib/chromebook-sleep/common.sh}
 # shellcheck source=common.sh
 source "$CS_LIB" || exit 0
 
