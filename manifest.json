@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.rbmrs.chromebook-sleep",
   "name": "Chromebook Sleep",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "rbm",
   "license": "MIT",
   "homepage": "https://github.com/rbmrs/chromebook-sleep",
